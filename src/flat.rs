@@ -1,12 +1,14 @@
 use elma::constants::OBJECT_RADIUS;
 use elma::lev::*;
 use elma::Position;
+use rand::Rng;
 
 #[derive(Clone, Debug)]
 pub struct FlatTrackConfig {
     width: f64,
     height: f64,
     num_segments: f64,
+    spike_height_range: std::ops::Range<f64>,
 }
 
 impl Default for FlatTrackConfig {
@@ -15,22 +17,25 @@ impl Default for FlatTrackConfig {
             width: 50.0,
             height: 7.0,
             num_segments: 40.0,
+            spike_height_range: -0.4..1.0,
         }
     }
 }
 
 fn gen_spike(
+    config: &FlatTrackConfig,
     x_offset: f64,
     width: f64,
+    rng: &mut impl Rng,
 ) -> [Position<f64>; 3] {
     [
         Position::new(x_offset + (width / 2.0), 0.0),
-        Position::new(x_offset, 0.5),
+        Position::new(x_offset, rng.gen_range(config.spike_height_range.clone())),
         Position::new(x_offset - (width / 2.0), 0.0),
     ]
 }
 
-fn gen_polygons(config: &FlatTrackConfig) -> Vec<Polygon> {
+fn gen_polygons(config: &FlatTrackConfig, rng: &mut impl Rng) -> Vec<Polygon> {
     let width = config.width;
     let height = config.height;
     let mut vertices = vec![];
@@ -60,7 +65,7 @@ fn gen_polygons(config: &FlatTrackConfig) -> Vec<Polygon> {
     vertices.extend(
         centre_of_spikes
             .iter()
-            .flat_map(|&c| gen_spike(c, segment_width)),
+            .flat_map(|&c| gen_spike(config, c, segment_width, rng)),
     );
     vertices.push(Position::new(4.0, 0.0));
     vertices.dedup_by(|a, b| (a.x - b.x).abs() < 0.005 && (a.y - b.y).abs() < 0.005);
@@ -71,10 +76,10 @@ fn gen_polygons(config: &FlatTrackConfig) -> Vec<Polygon> {
     }]
 }
 
-pub fn gen() -> Level {
+pub fn gen(rng: &mut impl Rng) -> Level {
     let config = FlatTrackConfig::default();
     let mut level = Level::new();
-    level.polygons = gen_polygons(&config);
+    level.polygons = gen_polygons(&config, rng);
     level.objects = vec![
         Object {
             position: Position::new(1.0, 0.0 + OBJECT_RADIUS),

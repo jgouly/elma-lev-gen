@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 elma = { git = "https://github.com/jgouly/elma-rust", branch = "fix-lev" }
+rand = { version = "0.8.5" }
