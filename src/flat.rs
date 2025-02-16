@@ -4,6 +4,23 @@ use elma::Position;
 use rand::Rng;
 
 #[derive(Clone, Debug)]
+struct PointConfig {
+    x_range: std::ops::Range<f64>,
+    y_range: std::ops::Range<f64>,
+    y_mod: fn(&FlatTrackConfig, f64) -> f64,
+}
+
+impl Default for PointConfig {
+    fn default() -> Self {
+        Self {
+            x_range: 0.1..1.2,
+            y_range: -0.5..0.7,
+            y_mod: |cfg, p| p.clamp((-cfg.height) + 3.0, cfg.height - 3.0),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 struct SegmentConfig {
     num_segments: f64,
     spike_height_range: std::ops::Range<f64>,
@@ -21,6 +38,7 @@ impl Default for SegmentConfig {
 #[derive(Clone, Debug)]
 enum TypeConfig {
     SegmentConfig(SegmentConfig),
+    PointConfig(PointConfig),
 }
 
 #[derive(Clone, Debug)]
@@ -35,7 +53,7 @@ impl Default for FlatTrackConfig {
         Self {
             width: 50.0,
             height: 7.0,
-            type_config: TypeConfig::SegmentConfig(SegmentConfig::default()),
+            type_config: TypeConfig::PointConfig(PointConfig::default()),
         }
     }
 }
@@ -52,6 +70,40 @@ fn gen_spike(
         Position::new(x_offset, rng.gen_range(sc.spike_height_range.clone())),
         Position::new(x_offset - (width / 2.0), 0.0),
     ]
+}
+
+fn gen_points(config: &FlatTrackConfig, rng: &mut impl Rng) -> Vec<Polygon> {
+    let width = config.width;
+    let height = config.height;
+    let TypeConfig::PointConfig(pc) = &config.type_config else {
+        unreachable!()
+    };
+    let mut vertices = vec![];
+
+    // Left wall
+    vertices.push(Position::new(0., 0.));
+    vertices.push(Position::new(0., height));
+    // Right wall
+    vertices.push(Position::new(width, height));
+    vertices.push(Position::new(width, 0.));
+
+    let mut last_point = Position::new(width - 3.0, 0.0);
+
+    while last_point.x > 3.0 {
+        vertices.push(last_point.clone());
+        last_point.x -= rng.gen_range(pc.x_range.clone());
+        last_point.y += rng.gen_range(pc.y_range.clone());
+        last_point.y = (pc.y_mod)(config, last_point.y);
+    }
+    if last_point.x < 3.0 {
+        vertices.pop();
+    }
+    vertices.push(Position::new(3., 0.));
+
+    vec![Polygon {
+        grass: false,
+        vertices,
+    }]
 }
 
 fn gen_segments(config: &FlatTrackConfig, rng: &mut impl Rng) -> Vec<Polygon> {
@@ -103,6 +155,7 @@ pub fn gen(rng: &mut impl Rng) -> Level {
     let mut level = Level::new();
     level.polygons = match config.type_config {
         TypeConfig::SegmentConfig(_) => gen_segments(&config, rng),
+        TypeConfig::PointConfig(_) => gen_points(&config, rng),
     };
     level.objects = vec![
         Object {
